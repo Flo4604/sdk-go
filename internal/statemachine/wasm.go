@@ -26,7 +26,6 @@ var sharedCore []byte
 
 var _sharedCoreMod wazero.CompiledModule
 var _wazeroRuntime wazero.Runtime
-var modPool sync.Pool
 
 var coreTraceLogging = strings.ToLower(os.Getenv("CORE_TRACE_LOGGING_ENABLED"))
 
@@ -45,8 +44,6 @@ func init() {
 	if err != nil {
 		log.Panicf("Cannot compile shared core WASM module: %s", err)
 	}
-
-	modPool = sync.Pool{}
 }
 
 // -- Exported logging
@@ -157,12 +154,6 @@ type Core struct {
 }
 
 func NewCore(ctx context.Context) (*Core, error) {
-	// Try to get pooled instance
-	pooledInstance := modPool.Get()
-	if pooledInstance != nil {
-		return pooledInstance.(*Core), nil
-	}
-
 	instance, err := _wazeroRuntime.InstantiateModule(
 		ctx,
 		_sharedCoreMod,
@@ -224,8 +215,7 @@ func NewCore(ctx context.Context) (*Core, error) {
 }
 
 func (core *Core) Close(ctx context.Context) error {
-	modPool.Put(core)
-	return nil
+	return core.mod.Close(ctx)
 }
 
 type concurrentContextUseError struct{}
